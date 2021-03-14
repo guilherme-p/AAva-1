@@ -1,5 +1,11 @@
-project: proj.c error_handling.c
-	gcc -Wall -Wextra -pedantic -g proj.c error_handling.c -o project
+project: proj.o error_handling.o
+	gcc proj.o error_handling.o -o project
+
+proj.o: proj.c
+	gcc -Wall -Wextra -pedantic -g -c proj.c
+
+error_handling.o: error_handling.c
+	gcc -Wall -Wextra -pedantic -g -c error_handling.c
 
 clean:
-	rm project
+	rm project *.o
