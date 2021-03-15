@@ -21,6 +21,11 @@ char *read_line() {
         }
     }
 
+    if (ch == EOF) {
+        fprintf(stderr, "EOF while reading. Exiting...\n");
+        exit(1);
+    }
+
     buffer[i] = '\0';
     return buffer;
 }
@@ -51,8 +56,40 @@ void naive_search(char *query_str, char *pattern) {
     printf("\n");
 }
 
-void knuth_morris_pratt(char *query_str, char *pattern) {
+void compute_lps(char *pattern, int N, size_t *lps) {
     NULL;
+}
+
+void knuth_morris_pratt(char *query_str, char *pattern) {
+    size_t M = strlen(query_str);
+    size_t N = strlen(pattern);
+
+    size_t lps[N];
+    compute_lps(pattern, N, lps);
+
+    size_t i = 0, j = 0;
+    size_t comps = 0;
+
+    while (i < M) {
+        if (query_str[i] == pattern[j]) {
+            i++;
+            j++;
+        } else {
+            if (j == 0)
+                i++;
+            else
+                j = lps[j - 1];
+        }
+
+        comps++;
+
+        if (j == N) {                           // Match
+            printf("%ld ", i - j);
+            j = lps[j - 1];
+        }
+    }
+
+    printf("\n%ld \n", comps);
 }
 
 void boyer_moore(char *query_str, char *pattern) {
@@ -63,37 +100,35 @@ int main() {
     char *input = read_line();
     char *query_str = NULL;
 
-    while (input[0] != '\0') {                     // input cant be null, check for empty input (\n or EOF in case tests dont always end on X)
+    while (input && input[0] != '\0') {                    
         char command = input[0];
-        char *arg = NULL;
+        char *arg = (strlen(input) > 1) ? input + 2 : // Skip input ptr over space
+                                          NULL;
 
         switch (command) {
             case 'T':
-                arg = input + 2;
-
-                query_str = read_query_str(arg); // Skip input ptr over space
+                query_str = read_query_str(arg); 
                 break;
 
             case 'N':
-                arg = input + 2;
-
                 naive_search(query_str, arg);
                 break;
 
             case 'K':
-                arg = input + 2;
-
                 knuth_morris_pratt(query_str, arg);
                 break;
 
             case 'B':
-                arg = input + 2;
-
                 boyer_moore(query_str, arg);
                 break;
 
             case 'X':
-                goto End; // Disgusting goto to reuse free-ing logic and return statement.
+                free(input);
+    
+                if (query_str)
+                    free(query_str);
+                
+                return 0;
 
             default:
                 fprintf(stderr, "Unknown/invalid command.\n");
@@ -102,13 +137,6 @@ int main() {
         free(input);
         input = read_line();
     }
-    
-
-End:
-    free(input);
-    
-    if (query_str)
-        free(query_str);
 
     return 0;
 }
