@@ -5,10 +5,8 @@
 #define BUFSIZE 256
 #define ALPHABET_SIZE 4          /* A C T G */
 
-#define MAX(a,b) (((a)>(b))?(a):(b))
-
 /* ---------------- */
-/* -ERROR-HANDLING- */
+/* ------MISC------ */
 /* ---------------- */
 
 void *safe_malloc(size_t size) {
@@ -42,6 +40,9 @@ void print_table(size_t *table, size_t N) {
     printf("\n");
 }
 
+long int max(long int s1, long int s2) {
+    return (s1 > s2) ? s1 : s2;
+}
 
 /* --------------- */
 /* -----INPUT----- */
@@ -200,123 +201,62 @@ void swap(char *s1, char *s2) {
     *s2 = temp;
 }
 
-char *reverse_str(char *str) {
-    size_t N, i;
-    char *new;
-
-    N = strlen(str);
-    new = safe_malloc(sizeof(char) * (N + 1));
-    strcpy(new, str);
-  
-    for (i = 0; i < N / 2; i++)
-        swap(&new[i], &new[N - i - 1]);
-    
-    return new;
-}
-
-void compute_Z(char *str, size_t Z[]) {
-    size_t N, L, R, k, i;
-
-    N = strlen(str);
-    
-    L = R = 0;
-    for (i = 1; i < N; i++) {
-        if (i > R) {
-            L = R = i;
-
-            while (R < N && str[R-L] == str[R])
-                R++;
-
-            Z[i] = R-L;
-            R--;
-        }
-
-        else {
-            k = i - L;
-
-            if (Z[k] < R - i + 1)
-                Z[i] = Z[k];
-  
-            else {
-                L = i;
-
-                while (R < N && str[R-L] == str[R])
-                    R++;
-
-                Z[i] = R - L;
-                R--;
-            }
-        }
-    }
-}
-
-void compute_N(size_t Z[], size_t N, size_t N_table[]) {
-    size_t j;
-    for (j = 0; j < N; j++) {
-        N_table[j] = Z[N - j - 1];
-    }
-}
-
-void compute_L(size_t N_table[], size_t N, size_t L_table[]) {
-    size_t i, j;
-    for (j = 0; j < N; j++) {
-        L_table[j] = 0;
-    }
-
-    for (j = 0; j < N - 1; j++) {
-        i = N - N_table[j] + 1;
-        /* printf("i: %ld j: %ld N_table[j]: %ld \n", i, j, N_table[j]); */
-
-        if (1 <= i && i <= N) {
-            L_table[i - 1] = j + 1;
-        }
-    }
-}
-
-void compute_l(size_t N_table[], size_t N, size_t l_table[]) {
-    size_t i, j;
-    size_t *largest_j = safe_malloc(sizeof(size_t) * (N + 1));
-
-    for (j = 0; j < N; j++) {
-        largest_j[j] = 0;
-        l_table[j] = 0;
-    }
-
-    for (j = 1; j <= N; j++) {
-        /* printf("j: %ld N_table[j - 1]: %ld\n", j, N_table[j - 1]); */
-        largest_j[j] = (N_table[j - 1] == j) ? j : largest_j[j - 1];
-    }
-
-    for (i = 0; i < N; i++) {
-        j = N - i;
-        l_table[i] = largest_j[j];
-    }
-
-    free(largest_j);
-}
-
 void compute_bad_match(char *pattern, size_t N, size_t *bad_match) {
     size_t idx, i;
 
     for (i = 0; i < ALPHABET_SIZE + 1; i++) {
-        bad_match[i] = 0;
+        bad_match[i] = -1;
     }
 
     for (i = 0; i < N; i++) {
         idx = get_alphabet_index(pattern[i]);
         bad_match[idx] = i;
     }
+}
 
-    bad_match[ALPHABET_SIZE] = -1;
+void compute_strong_suffix(size_t *strong_suffix, size_t *L, char *pattern, size_t N) {
+    size_t i, j;
+
+    for (i = 0; i < N + 1; i++) {
+        strong_suffix[i] = 0;
+    }
+
+    i = N;
+    j = N + 1;
+
+    L[i] = j;
+  
+    while (i > 0) {
+        while (j <= N && pattern[i - 1] != pattern[j - 1]) {
+            if (strong_suffix[j] == 0) {
+                strong_suffix[j] = j - i;
+            }
+  
+            j = L[j];
+        }
+
+        i--;
+        j--;
+        L[i] = j; 
+    }
+
+    j = L[0];
+
+    for (i = 0; i <= N; i++) {
+        if (strong_suffix[i] == 0) {
+            strong_suffix[i] = j;
+        }
+  
+        if (i == j) {
+            j = L[j];
+        }
+    }
 }
 
 void boyer_moore(char *query_str, char *pattern) {
-    size_t M, N, i, t, k, h, s1, s2, comps, flag;
-    size_t *bad_match, *Z, *N_table, *L_table, *l_table;
-
-    long int sub;
-
-    char *reverse_pattern;
+    size_t M, N, i, s1, s2, comps;
+    size_t *bad_match, *strong_suffix, *L;
+    int j;
 
     M = strlen(query_str);
     N = strlen(pattern);
@@ -324,77 +264,39 @@ void boyer_moore(char *query_str, char *pattern) {
     bad_match = safe_malloc(sizeof(size_t) * (ALPHABET_SIZE + 1));
     compute_bad_match(pattern, N, bad_match);
 
-    reverse_pattern = reverse_str(pattern);
-    Z = safe_malloc(sizeof(size_t) * N);
-    Z[0] = N;
-    
-    compute_Z(reverse_pattern, Z);
-    free(reverse_pattern);
-
-    N_table = safe_malloc(sizeof(size_t) * N);
-    compute_N(Z, N, N_table);
-
-    L_table = safe_malloc(sizeof(size_t) * N);
-    compute_L(N_table, N, L_table);
-
-    l_table = safe_malloc(sizeof(size_t) * (N + 1));
-    compute_l(N_table, N, l_table);
-
-    print_table(Z, N);
-    print_table(N_table, N);
-    print_table(L_table, N);
-    print_table(l_table, N);
-    printf("bad match:\n");
-    print_table(bad_match, ALPHABET_SIZE + 1);
+    L = safe_malloc(sizeof(size_t) * (N + 1));
+    strong_suffix = safe_malloc(sizeof(size_t) * (N + 1));
+    compute_strong_suffix(strong_suffix, L, pattern, N);
 
     comps = 0;
-    k = N;
+    i = 0;
 
-    while (k <= M) {
-        i = N;
-        h = k;
+    while (i <= (M - N)) {
+        j = N - 1;
 
-        flag = 0;
-
-        while (i > 0 && pattern[i - 1] == query_str[h - 1]) {
-            i--;
-            h--;
+        while (j >= 0 && pattern[j] == query_str[i + j]) {
+            j--;
             comps++;
-            printf("\ncomps1: %ld \n", comps);
-            flag = 1;
         }
 
-        if (!flag) {
-            k += 1;
-            continue;
-        }
+        if (j < 0) {
+            printf("%ld ", i);
 
-        if (i == 0) {
-            printf("%ld ", k - N);
-            k = k + N - l_table[1];
-            /* printf("k1: %ld \n", k); */
+            i += strong_suffix[0];
         } else {
-            t = bad_match[get_alphabet_index(query_str[h - 1])];
-            sub = i - t;
+            s1 = max(1, j - bad_match[get_alphabet_index(query_str[i + j])]);
+            s2 = strong_suffix[j + 1];
 
-            s1 = MAX(1, sub);
-            s2 = (L_table[i] > 0) ? N - L_table[i] : N - l_table[i];
-
-            k = k + MAX(s1, s2);
-            printf("\ns1: %ld s2: %ld L_table[i]: %ld\n", s1, s2, L_table[i]);
+            i += max(s1, s2);
             comps++;
-            printf("\ncomps3: %ld \n", comps);
         }
     }
 
-    printf("\ncomps: %ld \n", comps);
+    printf("\n%ld \n", comps);
 
     free(bad_match);
-    free(Z);
-    free(N_table);
-    free(L_table);
-    free(l_table);
-    /* free(shift); */
+    free(L);
+    free(strong_suffix);
 }
 
 
